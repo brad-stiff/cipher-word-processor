@@ -7,6 +7,8 @@ import {
 interface ToolbarProps {
   settings: CipherSettings;
   viewMode: ViewMode;
+  canUndo: boolean;
+  canRedo: boolean;
   onSettingsChange: (settings: CipherSettings) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onNew: () => void;
@@ -14,6 +16,8 @@ interface ToolbarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onExportEncrypted: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 const VIEWS: { id: ViewMode; label: string }[] = [
@@ -26,6 +30,8 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 export function Toolbar({
   settings,
   viewMode,
+  canUndo,
+  canRedo,
   onSettingsChange,
   onViewModeChange,
   onNew,
@@ -33,6 +39,8 @@ export function Toolbar({
   onSave,
   onSaveAs,
   onExportEncrypted,
+  onUndo,
+  onRedo,
 }: ToolbarProps) {
   const cipher = CIPHERS.find((c) => c.id === settings.id)!;
 
@@ -55,6 +63,12 @@ export function Toolbar({
         </button>
         <button type="button" onClick={onExportEncrypted}>
           Export Encrypted
+        </button>
+        <button type="button" onClick={onUndo} disabled={!canUndo}>
+          Undo
+        </button>
+        <button type="button" onClick={onRedo} disabled={!canRedo}>
+          Redo
         </button>
       </div>
 

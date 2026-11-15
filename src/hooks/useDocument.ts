@@ -1,10 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   encrypt,
   type CipherSettings,
   type ViewMode,
 } from "../ciphers";
 import { loadPreferences, savePreferences } from "../lib/preferences";
+import {
+  canRedo,
+  canUndo,
+  createTextHistory,
+  editText,
+  redoText,
+  replaceText,
+  undoText,
+  type TextHistory,
+} from "../lib/textHistory";
+
+const COALESCE_MS = 500;
 
 export interface DocumentState {
   text: string;
@@ -13,9 +25,13 @@ export interface DocumentState {
   viewMode: ViewMode;
   filePath: string | null;
   dirty: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   setText: (text: string) => void;
   setSettings: (settings: CipherSettings) => void;
   setViewMode: (mode: ViewMode) => void;
+  undo: () => void;
+  redo: () => void;
   newDocument: () => void;
   loadDocument: (text: string, path: string | null) => void;
   markSaved: (path: string) => void;
@@ -23,13 +39,21 @@ export interface DocumentState {
 
 export function useDocument(): DocumentState {
   const initial = useMemo(() => loadPreferences(), []);
-  const [text, setTextState] = useState("");
+  const [history, setHistory] = useState<TextHistory>(() =>
+    createTextHistory(""),
+  );
   const [settings, setSettingsState] = useState<CipherSettings>(
     initial.settings,
   );
   const [viewMode, setViewModeState] = useState<ViewMode>(initial.viewMode);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const lastGroupAt = useRef(0);
+
+  const text = history.present;
 
   const ciphertext = useMemo(
     () => encrypt(text, settings),
@@ -41,7 +65,34 @@ export function useDocument(): DocumentState {
   }, [settings, viewMode]);
 
   const setText = useCallback((next: string) => {
-    setTextState(next);
+    const prev = historyRef.current;
+    if (next === prev.present) return;
+    const now = Date.now();
+    const recordUndo = now - lastGroupAt.current > COALESCE_MS;
+    lastGroupAt.current = now;
+    const updated = editText(prev, next, { recordUndo });
+    historyRef.current = updated;
+    setHistory(updated);
+    setDirty(true);
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current;
+    if (!canUndo(prev)) return;
+    lastGroupAt.current = 0;
+    const updated = undoText(prev);
+    historyRef.current = updated;
+    setHistory(updated);
+    setDirty(true);
+  }, []);
+
+  const redo = useCallback(() => {
+    const prev = historyRef.current;
+    if (!canRedo(prev)) return;
+    lastGroupAt.current = 0;
+    const updated = redoText(prev);
+    historyRef.current = updated;
+    setHistory(updated);
     setDirty(true);
   }, []);
 
@@ -54,13 +105,19 @@ export function useDocument(): DocumentState {
   }, []);
 
   const newDocument = useCallback(() => {
-    setTextState("");
+    lastGroupAt.current = 0;
+    const updated = createTextHistory("");
+    historyRef.current = updated;
+    setHistory(updated);
     setFilePath(null);
     setDirty(false);
   }, []);
 
   const loadDocument = useCallback((next: string, path: string | null) => {
-    setTextState(next);
+    lastGroupAt.current = 0;
+    const updated = replaceText(historyRef.current, next);
+    historyRef.current = updated;
+    setHistory(updated);
     setFilePath(path);
     setDirty(false);
   }, []);
@@ -77,9 +134,13 @@ export function useDocument(): DocumentState {
     viewMode,
     filePath,
     dirty,
+    canUndo: canUndo(history),
+    canRedo: canRedo(history),
     setText,
     setSettings,
     setViewMode,
+    undo,
+    redo,
     newDocument,
     loadDocument,
     markSaved,

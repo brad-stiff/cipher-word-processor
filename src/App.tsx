@@ -79,6 +79,12 @@ function App() {
         case "file-export":
           void handleExport();
           break;
+        case "edit-undo":
+          doc.undo();
+          break;
+        case "edit-redo":
+          doc.redo();
+          break;
         case "view-plain":
           doc.setViewMode("plain");
           break;
@@ -98,6 +104,8 @@ function App() {
     return () => unlisten?.();
   }, [
     doc.setViewMode,
+    doc.undo,
+    doc.redo,
     handleNew,
     handleOpen,
     handleSave,
@@ -118,6 +126,13 @@ function App() {
       } else if (meta && e.key === "n") {
         e.preventDefault();
         void handleNew();
+      } else if (meta && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) doc.redo();
+        else doc.undo();
+      } else if (meta && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        doc.redo();
       } else if (meta && e.key === "1") {
         e.preventDefault();
         doc.setViewMode("plain");
@@ -134,13 +149,23 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doc.setViewMode, handleNew, handleOpen, handleSave, handleSaveAs]);
+  }, [
+    doc.setViewMode,
+    doc.undo,
+    doc.redo,
+    handleNew,
+    handleOpen,
+    handleSave,
+    handleSaveAs,
+  ]);
 
   return (
     <div className="app">
       <Toolbar
         settings={doc.settings}
         viewMode={doc.viewMode}
+        canUndo={doc.canUndo}
+        canRedo={doc.canRedo}
         onSettingsChange={doc.setSettings}
         onViewModeChange={doc.setViewMode}
         onNew={() => void handleNew()}
@@ -148,6 +173,8 @@ function App() {
         onSave={() => void handleSave()}
         onSaveAs={() => void handleSaveAs()}
         onExportEncrypted={() => void handleExport()}
+        onUndo={doc.undo}
+        onRedo={doc.redo}
       />
 
       <main className="workspace">

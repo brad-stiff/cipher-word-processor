@@ -35,4 +35,6 @@ npm run tauri:build
 | ⌘/Ctrl+O | Open |
 | ⌘/Ctrl+S | Save |
 | ⌘/Ctrl+Shift+S | Save As |
+| ⌘/Ctrl+Z | Undo |
+| ⌘/Ctrl+Shift+Z or ⌘/Ctrl+Y | Redo |
 | ⌘/Ctrl+1–4 | Plain / Encrypted / Side by side / Reveal |

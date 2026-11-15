@@ -58,6 +58,18 @@ pub fn run() {
                 ],
             )?;
 
+            let undo_i =
+                MenuItem::with_id(app, "edit-undo", "Undo", true, Some("CmdOrCtrl+Z"))?;
+            let redo_i = MenuItem::with_id(
+                app,
+                "edit-redo",
+                "Redo",
+                true,
+                Some("CmdOrCtrl+Shift+Z"),
+            )?;
+            let edit_menu =
+                Submenu::with_items(app, "Edit", true, &[&undo_i, &redo_i])?;
+
             let view_plain =
                 MenuItem::with_id(app, "view-plain", "Plain", true, Some("CmdOrCtrl+1"))?;
             let view_enc = MenuItem::with_id(
@@ -89,7 +101,7 @@ pub fn run() {
                 &[&view_plain, &view_enc, &view_side, &view_reveal],
             )?;
 
-            let menu = Menu::with_items(app, &[&file_menu, &view_menu])?;
+            let menu = Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             Ok(())
