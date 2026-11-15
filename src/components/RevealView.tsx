@@ -20,37 +20,31 @@ export function RevealView({
   const [split, setSplit] = useState(0.45);
   const containerRef = useRef<HTMLDivElement>(null);
   const encryptedRef = useRef<HTMLPreElement>(null);
-  const plainRef = useRef<HTMLTextAreaElement>(null);
+  const plainRef = useRef<HTMLPreElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragging = useRef(false);
   const syncing = useRef(false);
 
-  const syncScroll = useCallback((source: "encrypted" | "plain") => {
+  const syncScrollFromInput = useCallback(() => {
     if (syncing.current) return;
-    const from =
-      source === "encrypted" ? encryptedRef.current : plainRef.current;
-    const to =
-      source === "encrypted" ? plainRef.current : encryptedRef.current;
-    if (!from || !to) return;
+    const from = inputRef.current;
+    if (!from) return;
     syncing.current = true;
-    to.scrollTop = from.scrollTop;
-    to.scrollLeft = from.scrollLeft;
+    for (const to of [encryptedRef.current, plainRef.current]) {
+      if (!to) continue;
+      to.scrollTop = from.scrollTop;
+      to.scrollLeft = from.scrollLeft;
+    }
     requestAnimationFrame(() => {
       syncing.current = false;
     });
   }, []);
 
-  const onEncryptedScroll = useCallback(
-    (_e: UIEvent<HTMLPreElement>) => {
-      syncScroll("encrypted");
-    },
-    [syncScroll],
-  );
-
-  const onPlainScroll = useCallback(
+  const onInputScroll = useCallback(
     (_e: UIEvent<HTMLTextAreaElement>) => {
-      syncScroll("plain");
+      syncScrollFromInput();
     },
-    [syncScroll],
+    [syncScrollFromInput],
   );
 
   const onPointerMove = useCallback((clientY: number) => {
@@ -58,7 +52,7 @@ export function RevealView({
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const next = (clientY - rect.top) / rect.height;
-    setSplit(Math.min(0.9, Math.max(0.1, next)));
+    setSplit(Math.min(1, Math.max(0, next)));
   }, []);
 
   const startDrag = useCallback(
@@ -86,9 +80,29 @@ export function RevealView({
   const topPct = split * 100;
   const bottomClip = 100 - topPct;
 
+  // Lift Encrypted out as the Plain label approaches the top
+  const encryptedFadeStart = 0.16;
+  const encryptedFadeEnd = 0.05;
+  const encryptedVisible = Math.min(
+    1,
+    Math.max(
+      0,
+      (split - encryptedFadeEnd) / (encryptedFadeStart - encryptedFadeEnd),
+    ),
+  );
+
   return (
     <div className="reveal" ref={containerRef}>
-      <div className="reveal-label reveal-label-encrypted">Encrypted</div>
+      <div
+        className="reveal-label reveal-label-encrypted"
+        style={{
+          opacity: encryptedVisible,
+          transform: `translateY(${(1 - encryptedVisible) * -0.75}rem)`,
+        }}
+        aria-hidden={encryptedVisible < 0.05}
+      >
+        Encrypted
+      </div>
       <div
         className="reveal-label reveal-label-plain"
         style={{ top: `${topPct}%` }}
@@ -97,24 +111,30 @@ export function RevealView({
       </div>
 
       <pre
+        ref={plainRef}
+        className="editor reveal-full reveal-plain-layer"
+        aria-hidden="true"
+      >
+        {plain}
+      </pre>
+
+      <pre
         ref={encryptedRef}
         className="editor reveal-full reveal-encrypted-layer"
         style={{ clipPath: `inset(0 0 ${bottomClip}% 0)` }}
-        aria-label="Encrypted"
-        onScroll={onEncryptedScroll}
+        aria-hidden="true"
       >
         {encrypted}
       </pre>
 
       <textarea
-        ref={plainRef}
-        className="editor reveal-full reveal-plain-layer"
-        style={{ clipPath: `inset(${topPct}% 0 0 0)` }}
+        ref={inputRef}
+        className="editor reveal-full reveal-input-layer"
         value={plain}
         spellCheck={false}
         aria-label="Plain"
         onChange={(e) => onPlainChange(e.target.value)}
-        onScroll={onPlainScroll}
+        onScroll={onInputScroll}
       />
 
       <div
@@ -127,6 +147,8 @@ export function RevealView({
         role="separator"
         aria-orientation="horizontal"
         aria-valuenow={Math.round(topPct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
         aria-label="Reveal divider"
         tabIndex={0}
       >

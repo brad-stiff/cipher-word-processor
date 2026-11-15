@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { EditorPane } from "./EditorPane";
+import { plaintextFromEncryptedEdit } from "../lib/encryptedEdit";
 
 interface SideBySideProps {
   plain: string;
@@ -54,7 +55,13 @@ export function SideBySide({
         className="side-pane"
         onScrollCapture={() => syncScroll("right")}
       >
-        <EditorPane label="Encrypted" value={encrypted} readOnly />
+        <EditorPane
+          label="Encrypted"
+          value={encrypted}
+          onChange={(next) =>
+            onPlainChange(plaintextFromEncryptedEdit(plain, encrypted, next))
+          }
+        />
       </div>
     </div>
   );

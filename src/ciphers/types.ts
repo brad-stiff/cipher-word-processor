@@ -1,4 +1,4 @@
-export type CipherId = "caesar" | "rot13" | "atbash" | "vigenere";
+export type CipherId = "none" | "caesar" | "rot13" | "atbash" | "vigenere";
 
 export type ViewMode = "plain" | "encrypted" | "side-by-side" | "reveal";
 
@@ -17,6 +17,11 @@ export interface CipherDefinition {
 }
 
 export const CIPHERS: CipherDefinition[] = [
+  {
+    id: "none",
+    name: "None",
+    description: "No encryption — save and open as plain text",
+  },
   {
     id: "caesar",
     name: "Caesar",

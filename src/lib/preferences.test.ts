@@ -39,6 +39,14 @@ describe("preferences", () => {
     });
   });
 
+  it("accepts none cipher", () => {
+    savePreferences({
+      settings: { id: "none", shift: 3, keyword: "KEY" },
+      viewMode: "plain",
+    });
+    expect(loadPreferences().settings.id).toBe("none");
+  });
+
   it("clamps shift and rejects bad view modes", () => {
     memory.set(
       "cipher-word-processor.prefs",

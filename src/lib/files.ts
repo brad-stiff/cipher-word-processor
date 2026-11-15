@@ -53,13 +53,3 @@ export async function saveTextFileAs(contents: string): Promise<string | null> {
   await invoke("write_text_file", { path, contents });
   return path;
 }
-
-export async function exportCiphertext(contents: string): Promise<boolean> {
-  const path = await save({
-    filters: [TXT_FILTER],
-    defaultPath: "encrypted.txt",
-  });
-  if (!path) return false;
-  await invoke("write_text_file", { path, contents });
-  return true;
-}

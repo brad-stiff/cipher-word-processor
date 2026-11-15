@@ -1,8 +1,5 @@
-import {
-  CIPHERS,
-  type CipherSettings,
-  type ViewMode,
-} from "../ciphers";
+import type { CipherSettings, ViewMode } from "../ciphers";
+import { CipherControls } from "./CipherControls";
 
 interface ToolbarProps {
   settings: CipherSettings;
@@ -15,7 +12,6 @@ interface ToolbarProps {
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onExportEncrypted: () => void;
   onUndo: () => void;
   onRedo: () => void;
 }
@@ -38,12 +34,9 @@ export function Toolbar({
   onOpen,
   onSave,
   onSaveAs,
-  onExportEncrypted,
   onUndo,
   onRedo,
 }: ToolbarProps) {
-  const cipher = CIPHERS.find((c) => c.id === settings.id)!;
-
   return (
     <header className="toolbar">
       <div className="toolbar-brand">Cipher</div>
@@ -61,9 +54,6 @@ export function Toolbar({
         <button type="button" onClick={onSaveAs}>
           Save As
         </button>
-        <button type="button" onClick={onExportEncrypted}>
-          Export Encrypted
-        </button>
         <button type="button" onClick={onUndo} disabled={!canUndo}>
           Undo
         </button>
@@ -73,62 +63,7 @@ export function Toolbar({
       </div>
 
       <div className="toolbar-group">
-        <label className="field">
-          <span>Cipher</span>
-          <select
-            value={settings.id}
-            onChange={(e) =>
-              onSettingsChange({
-                ...settings,
-                id: e.target.value as CipherSettings["id"],
-              })
-            }
-          >
-            {CIPHERS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {cipher.needsShift && (
-          <label className="field">
-            <span>Shift</span>
-            <input
-              type="number"
-              min={0}
-              max={25}
-              value={settings.shift}
-              onChange={(e) =>
-                onSettingsChange({
-                  ...settings,
-                  shift: Math.min(
-                    25,
-                    Math.max(0, Number(e.target.value) || 0),
-                  ),
-                })
-              }
-            />
-          </label>
-        )}
-
-        {cipher.needsKeyword && (
-          <label className="field">
-            <span>Keyword</span>
-            <input
-              type="text"
-              value={settings.keyword}
-              spellCheck={false}
-              onChange={(e) =>
-                onSettingsChange({
-                  ...settings,
-                  keyword: e.target.value,
-                })
-              }
-            />
-          </label>
-        )}
+        <CipherControls settings={settings} onChange={onSettingsChange} />
       </div>
 
       <div className="view-switch" role="group" aria-label="View mode">
@@ -138,6 +73,7 @@ export function Toolbar({
             type="button"
             className={viewMode === v.id ? "active" : ""}
             onClick={() => onViewModeChange(v.id)}
+            disabled={settings.id === "none" && v.id !== "plain"}
           >
             {v.label}
           </button>

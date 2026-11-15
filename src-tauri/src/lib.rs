@@ -31,31 +31,14 @@ pub fn run() {
                 true,
                 Some("CmdOrCtrl+Shift+S"),
             )?;
-            let export_i = MenuItem::with_id(
-                app,
-                "file-export",
-                "Export Encrypted…",
-                true,
-                None::<&str>,
-            )?;
-            let sep1 = PredefinedMenuItem::separator(app)?;
-            let sep2 = PredefinedMenuItem::separator(app)?;
+            let sep = PredefinedMenuItem::separator(app)?;
             let quit_i = PredefinedMenuItem::quit(app, Some("Quit"))?;
 
             let file_menu = Submenu::with_items(
                 app,
                 "File",
                 true,
-                &[
-                    &new_i,
-                    &open_i,
-                    &save_i,
-                    &save_as_i,
-                    &sep1,
-                    &export_i,
-                    &sep2,
-                    &quit_i,
-                ],
+                &[&new_i, &open_i, &save_i, &save_as_i, &sep, &quit_i],
             )?;
 
             let undo_i =

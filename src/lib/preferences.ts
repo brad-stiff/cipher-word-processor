@@ -7,7 +7,13 @@ import {
 
 const STORAGE_KEY = "cipher-word-processor.prefs";
 
-const CIPHER_IDS: CipherId[] = ["caesar", "rot13", "atbash", "vigenere"];
+const CIPHER_IDS: CipherId[] = [
+  "none",
+  "caesar",
+  "rot13",
+  "atbash",
+  "vigenere",
+];
 const VIEW_MODES: ViewMode[] = [
   "plain",
   "encrypted",

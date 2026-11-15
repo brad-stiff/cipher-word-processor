@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Toolbar } from "./components/Toolbar";
@@ -6,20 +6,28 @@ import { StatusBar } from "./components/StatusBar";
 import { EditorPane } from "./components/EditorPane";
 import { SideBySide } from "./components/SideBySide";
 import { RevealView } from "./components/RevealView";
+import { OpenDecryptDialog } from "./components/OpenDecryptDialog";
 import { useDocument } from "./hooks/useDocument";
+import { encrypt, type CipherSettings } from "./ciphers";
 import {
   confirmDiscard,
-  exportCiphertext,
   openTextFile,
   saveTextFile,
   saveTextFileAs,
 } from "./lib/files";
+import { plaintextFromEncryptedEdit } from "./lib/encryptedEdit";
 import "./App.css";
+
+interface PendingOpen {
+  path: string;
+  contents: string;
+}
 
 function App() {
   const doc = useDocument();
   const dirtyRef = useRef(doc.dirty);
   dirtyRef.current = doc.dirty;
+  const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
 
   const handleNew = useCallback(async () => {
     if (!(await confirmDiscard(doc.dirty))) return;
@@ -29,22 +37,46 @@ function App() {
   const handleOpen = useCallback(async () => {
     if (!(await confirmDiscard(doc.dirty))) return;
     const file = await openTextFile();
-    if (file) doc.loadDocument(file.contents, file.path);
-  }, [doc.dirty, doc.loadDocument]);
+    if (file) setPendingOpen(file);
+  }, [doc.dirty]);
+
+  const handleOpenConfirm = useCallback(
+    (settings: CipherSettings) => {
+      if (!pendingOpen) return;
+      if (settings.id === "none" && doc.viewMode !== "plain") {
+        doc.setViewMode("plain");
+      }
+      doc.loadEncryptedFile(
+        pendingOpen.contents,
+        pendingOpen.path,
+        settings,
+      );
+      setPendingOpen(null);
+    },
+    [pendingOpen, doc.setViewMode, doc.loadEncryptedFile, doc.viewMode],
+  );
+
+  const handleSettingsChange = useCallback(
+    (settings: CipherSettings) => {
+      if (settings.id === "none" && doc.viewMode !== "plain") {
+        doc.setViewMode("plain");
+      }
+      doc.setSettings(settings);
+    },
+    [doc.setSettings, doc.setViewMode, doc.viewMode],
+  );
 
   const handleSave = useCallback(async () => {
-    const path = await saveTextFile(doc.text, doc.filePath);
+    const contents = encrypt(doc.text, doc.settings);
+    const path = await saveTextFile(contents, doc.filePath);
     if (path) doc.markSaved(path);
-  }, [doc.text, doc.filePath, doc.markSaved]);
+  }, [doc.text, doc.settings, doc.filePath, doc.markSaved]);
 
   const handleSaveAs = useCallback(async () => {
-    const path = await saveTextFileAs(doc.text);
+    const contents = encrypt(doc.text, doc.settings);
+    const path = await saveTextFileAs(contents);
     if (path) doc.markSaved(path);
-  }, [doc.text, doc.markSaved]);
-
-  const handleExport = useCallback(async () => {
-    await exportCiphertext(doc.ciphertext);
-  }, [doc.ciphertext]);
+  }, [doc.text, doc.settings, doc.markSaved]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -76,9 +108,6 @@ function App() {
         case "file-save-as":
           void handleSaveAs();
           break;
-        case "file-export":
-          void handleExport();
-          break;
         case "edit-undo":
           doc.undo();
           break;
@@ -89,13 +118,13 @@ function App() {
           doc.setViewMode("plain");
           break;
         case "view-encrypted":
-          doc.setViewMode("encrypted");
+          if (doc.settings.id !== "none") doc.setViewMode("encrypted");
           break;
         case "view-side":
-          doc.setViewMode("side-by-side");
+          if (doc.settings.id !== "none") doc.setViewMode("side-by-side");
           break;
         case "view-reveal":
-          doc.setViewMode("reveal");
+          if (doc.settings.id !== "none") doc.setViewMode("reveal");
           break;
       }
     }).then((fn) => {
@@ -106,15 +135,16 @@ function App() {
     doc.setViewMode,
     doc.undo,
     doc.redo,
+    doc.settings.id,
     handleNew,
     handleOpen,
     handleSave,
     handleSaveAs,
-    handleExport,
   ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (pendingOpen) return;
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key === "s") {
         e.preventDefault();
@@ -138,26 +168,32 @@ function App() {
         doc.setViewMode("plain");
       } else if (meta && e.key === "2") {
         e.preventDefault();
-        doc.setViewMode("encrypted");
+        if (doc.settings.id !== "none") doc.setViewMode("encrypted");
       } else if (meta && e.key === "3") {
         e.preventDefault();
-        doc.setViewMode("side-by-side");
+        if (doc.settings.id !== "none") doc.setViewMode("side-by-side");
       } else if (meta && e.key === "4") {
         e.preventDefault();
-        doc.setViewMode("reveal");
+        if (doc.settings.id !== "none") doc.setViewMode("reveal");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    pendingOpen,
     doc.setViewMode,
     doc.undo,
     doc.redo,
+    doc.settings.id,
     handleNew,
     handleOpen,
     handleSave,
     handleSaveAs,
   ]);
+
+  const pendingName = pendingOpen
+    ? pendingOpen.path.split(/[/\\]/).pop() ?? pendingOpen.path
+    : "";
 
   return (
     <div className="app">
@@ -166,13 +202,12 @@ function App() {
         viewMode={doc.viewMode}
         canUndo={doc.canUndo}
         canRedo={doc.canRedo}
-        onSettingsChange={doc.setSettings}
+        onSettingsChange={handleSettingsChange}
         onViewModeChange={doc.setViewMode}
         onNew={() => void handleNew()}
         onOpen={() => void handleOpen()}
         onSave={() => void handleSave()}
         onSaveAs={() => void handleSaveAs()}
-        onExportEncrypted={() => void handleExport()}
         onUndo={doc.undo}
         onRedo={doc.redo}
       />
@@ -189,7 +224,11 @@ function App() {
           <EditorPane
             label="Encrypted"
             value={doc.ciphertext}
-            readOnly
+            onChange={(next) =>
+              doc.setText(
+                plaintextFromEncryptedEdit(doc.text, doc.ciphertext, next),
+              )
+            }
           />
         )}
         {doc.viewMode === "side-by-side" && (
@@ -214,6 +253,15 @@ function App() {
         dirty={doc.dirty}
         filePath={doc.filePath}
       />
+
+      {pendingOpen && (
+        <OpenDecryptDialog
+          fileName={pendingName}
+          initialSettings={doc.settings}
+          onConfirm={handleOpenConfirm}
+          onCancel={() => setPendingOpen(null)}
+        />
+      )}
     </div>
   );
 }

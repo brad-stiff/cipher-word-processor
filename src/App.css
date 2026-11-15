@@ -248,16 +248,33 @@ body {
   margin: 0;
   border-radius: 8px;
   z-index: 1;
-}
-
-.reveal-encrypted-layer {
-  background: #e7eef1;
-  z-index: 2;
+  /* Clear the Encrypted / Plain overlay labels */
+  padding-top: 2rem;
 }
 
 .reveal-plain-layer {
   background: var(--surface);
   z-index: 1;
+  pointer-events: none;
+}
+
+.reveal-encrypted-layer {
+  background: #e7eef1;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.reveal-input-layer {
+  z-index: 3;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  -webkit-text-fill-color: transparent;
+}
+
+.reveal-input-layer::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: transparent;
 }
 
 .reveal-label {
@@ -280,7 +297,7 @@ body {
 }
 
 .reveal-label-plain {
-  /* top set inline from split */
+  /* top set inline from split; sit just under the divider */
   transform: translateY(0.45rem);
 }
 
@@ -327,4 +344,82 @@ body {
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   border-top: 1px solid var(--line);
   font-family: var(--font-mono);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+
+.modal {
+  width: min(420px, 100%);
+  padding: 1.15rem 1.25rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+.modal h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.modal-copy {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.modal-copy strong {
+  color: var(--ink);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.modal-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.modal-actions button {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.modal-actions button:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+
+.modal-actions button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #f4fffc;
+}
+
+.modal-actions button.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  border-color: color-mix(in srgb, var(--accent) 88%, var(--ink));
 }

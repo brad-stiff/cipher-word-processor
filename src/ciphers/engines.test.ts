@@ -68,6 +68,7 @@ describe("vigenere", () => {
 
 describe("encrypt / decrypt", () => {
   const cases: CipherSettings[] = [
+    { id: "none", shift: 0, keyword: "" },
     { id: "caesar", shift: 5, keyword: "" },
     { id: "rot13", shift: 0, keyword: "" },
     { id: "atbash", shift: 0, keyword: "" },
@@ -80,4 +81,10 @@ describe("encrypt / decrypt", () => {
       expect(decrypt(encrypt(plain, settings), settings)).toBe(plain);
     });
   }
+
+  it("none leaves text unchanged", () => {
+    const settings: CipherSettings = { id: "none", shift: 3, keyword: "KEY" };
+    expect(encrypt("Hello", settings)).toBe("Hello");
+    expect(decrypt("Hello", settings)).toBe("Hello");
+  });
 });

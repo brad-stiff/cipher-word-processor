@@ -63,6 +63,8 @@ export function vigenere(
 
 export function encrypt(text: string, settings: CipherSettings): string {
   switch (settings.id) {
+    case "none":
+      return text;
     case "caesar":
       return caesar(text, settings.shift);
     case "rot13":
@@ -76,6 +78,8 @@ export function encrypt(text: string, settings: CipherSettings): string {
 
 export function decrypt(text: string, settings: CipherSettings): string {
   switch (settings.id) {
+    case "none":
+      return text;
     case "caesar":
       return caesar(text, settings.shift, true);
     case "rot13":
