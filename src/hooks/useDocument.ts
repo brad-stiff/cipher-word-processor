@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  DEFAULT_SETTINGS,
   encrypt,
   type CipherSettings,
   type ViewMode,
 } from "../ciphers";
+import { loadPreferences, savePreferences } from "../lib/preferences";
 
 export interface DocumentState {
   text: string;
@@ -22,10 +22,12 @@ export interface DocumentState {
 }
 
 export function useDocument(): DocumentState {
+  const initial = useMemo(() => loadPreferences(), []);
   const [text, setTextState] = useState("");
-  const [settings, setSettingsState] =
-    useState<CipherSettings>(DEFAULT_SETTINGS);
-  const [viewMode, setViewMode] = useState<ViewMode>("plain");
+  const [settings, setSettingsState] = useState<CipherSettings>(
+    initial.settings,
+  );
+  const [viewMode, setViewModeState] = useState<ViewMode>(initial.viewMode);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -34,6 +36,10 @@ export function useDocument(): DocumentState {
     [text, settings],
   );
 
+  useEffect(() => {
+    savePreferences({ settings, viewMode });
+  }, [settings, viewMode]);
+
   const setText = useCallback((next: string) => {
     setTextState(next);
     setDirty(true);
@@ -41,6 +47,10 @@ export function useDocument(): DocumentState {
 
   const setSettings = useCallback((next: CipherSettings) => {
     setSettingsState(next);
+  }, []);
+
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
   }, []);
 
   const newDocument = useCallback(() => {

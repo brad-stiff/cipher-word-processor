@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { EditorPane } from "./components/EditorPane";
@@ -17,6 +18,8 @@ import "./App.css";
 
 function App() {
   const doc = useDocument();
+  const dirtyRef = useRef(doc.dirty);
+  dirtyRef.current = doc.dirty;
 
   const handleNew = useCallback(async () => {
     if (!(await confirmDiscard(doc.dirty))) return;
@@ -42,6 +45,20 @@ function App() {
   const handleExport = useCallback(async () => {
     await exportCiphertext(doc.ciphertext);
   }, [doc.ciphertext]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onCloseRequested(async (event) => {
+        if (!dirtyRef.current) return;
+        const allow = await confirmDiscard(true);
+        if (!allow) event.preventDefault();
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => unlisten?.();
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
