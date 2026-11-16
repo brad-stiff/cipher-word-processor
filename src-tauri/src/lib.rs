@@ -50,8 +50,22 @@ pub fn run() {
                 true,
                 Some("CmdOrCtrl+Shift+Z"),
             )?;
-            let edit_menu =
-                Submenu::with_items(app, "Edit", true, &[&undo_i, &redo_i])?;
+            let edit_sep = PredefinedMenuItem::separator(app)?;
+            let find_i =
+                MenuItem::with_id(app, "edit-find", "Find…", true, Some("CmdOrCtrl+F"))?;
+            let replace_i = MenuItem::with_id(
+                app,
+                "edit-replace",
+                "Replace…",
+                true,
+                Some("CmdOrCtrl+H"),
+            )?;
+            let edit_menu = Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[&undo_i, &redo_i, &edit_sep, &find_i, &replace_i],
+            )?;
 
             let view_plain =
                 MenuItem::with_id(app, "view-plain", "Plain", true, Some("CmdOrCtrl+1"))?;

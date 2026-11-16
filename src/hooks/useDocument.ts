@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  decrypt,
   encrypt,
   type CipherSettings,
   type ViewMode,
@@ -34,8 +33,8 @@ export interface DocumentState {
   undo: () => void;
   redo: () => void;
   newDocument: () => void;
-  loadEncryptedFile: (
-    fileContents: string,
+  loadDocument: (
+    text: string,
     path: string,
     settings: CipherSettings,
   ) => void;
@@ -53,12 +52,9 @@ export function useDocument(): DocumentState {
   const [viewMode, setViewModeState] = useState<ViewMode>(initial.viewMode);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [openedCiphertext, setOpenedCiphertext] = useState<string | null>(null);
 
   const historyRef = useRef(history);
   historyRef.current = history;
-  const openedCiphertextRef = useRef(openedCiphertext);
-  openedCiphertextRef.current = openedCiphertext;
   const lastGroupAt = useRef(0);
 
   const text = history.present;
@@ -72,101 +68,76 @@ export function useDocument(): DocumentState {
     savePreferences({ settings, viewMode });
   }, [settings, viewMode]);
 
-  const clearOpenedBinding = useCallback(() => {
-    openedCiphertextRef.current = null;
-    setOpenedCiphertext(null);
-  }, []);
-
-  const applyPlaintext = useCallback((next: string) => {
-    lastGroupAt.current = 0;
-    const updated = replaceText(historyRef.current, next);
+  const setText = useCallback((next: string) => {
+    const prev = historyRef.current;
+    if (next === prev.present) return;
+    const now = Date.now();
+    const recordUndo = now - lastGroupAt.current > COALESCE_MS;
+    lastGroupAt.current = now;
+    const updated = editText(prev, next, { recordUndo });
     historyRef.current = updated;
     setHistory(updated);
+    setDirty(true);
   }, []);
-
-  const setText = useCallback(
-    (next: string) => {
-      const prev = historyRef.current;
-      if (next === prev.present) return;
-      clearOpenedBinding();
-      const now = Date.now();
-      const recordUndo = now - lastGroupAt.current > COALESCE_MS;
-      lastGroupAt.current = now;
-      const updated = editText(prev, next, { recordUndo });
-      historyRef.current = updated;
-      setHistory(updated);
-      setDirty(true);
-    },
-    [clearOpenedBinding],
-  );
 
   const undo = useCallback(() => {
     const prev = historyRef.current;
     if (!canUndo(prev)) return;
-    clearOpenedBinding();
     lastGroupAt.current = 0;
     const updated = undoText(prev);
     historyRef.current = updated;
     setHistory(updated);
     setDirty(true);
-  }, [clearOpenedBinding]);
+  }, []);
 
   const redo = useCallback(() => {
     const prev = historyRef.current;
     if (!canRedo(prev)) return;
-    clearOpenedBinding();
     lastGroupAt.current = 0;
     const updated = redoText(prev);
     historyRef.current = updated;
     setHistory(updated);
     setDirty(true);
-  }, [clearOpenedBinding]);
+  }, []);
 
-  const setSettings = useCallback(
-    (next: CipherSettings) => {
-      setSettingsState(next);
-      const source = openedCiphertextRef.current;
-      if (source === null) return;
-      applyPlaintext(decrypt(source, next));
-      setDirty(false);
-    },
-    [applyPlaintext],
-  );
+  const setSettings = useCallback((next: CipherSettings) => {
+    setSettingsState(next);
+    setDirty(true);
+  }, []);
 
   const setViewMode = useCallback((mode: ViewMode) => {
     setViewModeState(mode);
   }, []);
 
   const newDocument = useCallback(() => {
-    clearOpenedBinding();
     lastGroupAt.current = 0;
     const updated = createTextHistory("");
     historyRef.current = updated;
     setHistory(updated);
     setFilePath(null);
     setDirty(false);
-  }, [clearOpenedBinding]);
+  }, []);
 
-  const loadEncryptedFile = useCallback(
-    (fileContents: string, path: string, nextSettings: CipherSettings) => {
-      openedCiphertextRef.current = fileContents;
-      setOpenedCiphertext(fileContents);
+  const loadDocument = useCallback(
+    (nextText: string, path: string, nextSettings: CipherSettings) => {
+      lastGroupAt.current = 0;
+      const updated = replaceText(historyRef.current, nextText);
+      historyRef.current = updated;
+      setHistory(updated);
       setSettingsState(nextSettings);
-      applyPlaintext(decrypt(fileContents, nextSettings));
       setFilePath(path);
       setDirty(false);
+      if (nextSettings.id === "none") {
+        setViewModeState("plain");
+      }
     },
-    [applyPlaintext],
+    [],
   );
 
-  const markSaved = useCallback(
-    (path: string) => {
-      clearOpenedBinding();
-      setFilePath(path);
-      setDirty(false);
-    },
-    [clearOpenedBinding],
-  );
+  const markSaved = useCallback((path: string) => {
+    setFilePath(path);
+    setDirty(false);
+  }, []);
 
   return {
     text,
@@ -183,7 +154,7 @@ export function useDocument(): DocumentState {
     undo,
     redo,
     newDocument,
-    loadEncryptedFile,
+    loadDocument,
     markSaved,
   };
 }

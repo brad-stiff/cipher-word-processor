@@ -4,6 +4,9 @@
  * The user types plaintext keystrokes into a ciphertext buffer; the browser
  * inserts those raw characters. We splice the same range into the plaintext,
  * then the UI re-encrypts for display so the typed letter becomes its cipher form.
+ *
+ * Only valid when the active cipher `preservesLength` (plain and cipher share
+ * indices). Callers must not use this for length-changing ciphers.
  */
 export function plaintextFromEncryptedEdit(
   previousPlain: string,

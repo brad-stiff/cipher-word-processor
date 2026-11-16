@@ -3,57 +3,174 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
-import { EditorPane } from "./components/EditorPane";
+import { EditorPane, type EditorPaneHandle } from "./components/EditorPane";
 import { SideBySide } from "./components/SideBySide";
 import { RevealView } from "./components/RevealView";
-import { OpenDecryptDialog } from "./components/OpenDecryptDialog";
+import { PasswordDialog } from "./components/PasswordDialog";
+import { FindReplaceBar } from "./components/FindReplaceBar";
 import { useDocument } from "./hooks/useDocument";
-import { encrypt, type CipherSettings } from "./ciphers";
+import {
+  cipherPreservesLength,
+  DEFAULT_SETTINGS,
+  type CipherSettings,
+} from "./ciphers";
 import {
   confirmDiscard,
-  openTextFile,
-  saveTextFile,
-  saveTextFileAs,
+  openDocumentFile,
+  saveLockedFile,
+  saveLockedFileAs,
+  savePlainTextFile,
+  savePlainTextFileAs,
 } from "./lib/files";
 import { plaintextFromEncryptedEdit } from "./lib/encryptedEdit";
+import { isVaultFile, sealVault, unlockVault } from "./lib/vault";
 import "./App.css";
 
-interface PendingOpen {
+interface PendingUnlock {
   path: string;
   contents: string;
+}
+
+type PasswordPrompt =
+  | { kind: "unlock"; pending: PendingUnlock }
+  | { kind: "set"; saveAs: boolean };
+
+function fileName(path: string): string {
+  return path.split(/[/\\]/).pop() ?? path;
 }
 
 function App() {
   const doc = useDocument();
   const dirtyRef = useRef(doc.dirty);
   dirtyRef.current = doc.dirty;
-  const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
+
+  const [findOpen, setFindOpen] = useState(false);
+  const [findPreferReplace, setFindPreferReplace] = useState(false);
+  const [findNonce, setFindNonce] = useState(0);
+  const [passwordPrompt, setPasswordPrompt] = useState<PasswordPrompt | null>(
+    null,
+  );
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
+  const editorRef = useRef<EditorPaneHandle>(null);
+  const sessionPasswordRef = useRef<string | null>(null);
+  const allowsEncryptedEdit = cipherPreservesLength(doc.settings.id);
+
+  const clearSessionPassword = useCallback(() => {
+    sessionPasswordRef.current = null;
+  }, []);
 
   const handleNew = useCallback(async () => {
     if (!(await confirmDiscard(doc.dirty))) return;
+    clearSessionPassword();
     doc.newDocument();
-  }, [doc.dirty, doc.newDocument]);
+  }, [doc.dirty, doc.newDocument, clearSessionPassword]);
 
   const handleOpen = useCallback(async () => {
     if (!(await confirmDiscard(doc.dirty))) return;
-    const file = await openTextFile();
-    if (file) setPendingOpen(file);
-  }, [doc.dirty]);
+    const file = await openDocumentFile();
+    if (!file) return;
 
-  const handleOpenConfirm = useCallback(
-    (settings: CipherSettings) => {
-      if (!pendingOpen) return;
-      if (settings.id === "none" && doc.viewMode !== "plain") {
-        doc.setViewMode("plain");
-      }
-      doc.loadEncryptedFile(
-        pendingOpen.contents,
-        pendingOpen.path,
-        settings,
+    if (isVaultFile(file.contents)) {
+      setPasswordError(null);
+      setPasswordPrompt({ kind: "unlock", pending: file });
+      return;
+    }
+
+    clearSessionPassword();
+    doc.loadDocument(file.contents, file.path, {
+      ...DEFAULT_SETTINGS,
+      id: "none",
+    });
+  }, [doc.dirty, doc.loadDocument, clearSessionPassword]);
+
+  const writeLocked = useCallback(
+    async (password: string, saveAs: boolean) => {
+      const contents = await sealVault(
+        { text: doc.text, settings: doc.settings },
+        password,
       );
-      setPendingOpen(null);
+      const path = saveAs
+        ? await saveLockedFileAs(contents)
+        : await saveLockedFile(contents, doc.filePath);
+      if (!path) return false;
+      sessionPasswordRef.current = password;
+      doc.markSaved(path);
+      return true;
     },
-    [pendingOpen, doc.setViewMode, doc.loadEncryptedFile, doc.viewMode],
+    [doc.text, doc.settings, doc.filePath, doc.markSaved],
+  );
+
+  const writePlain = useCallback(
+    async (saveAs: boolean) => {
+      const path = saveAs
+        ? await savePlainTextFileAs(doc.text)
+        : await savePlainTextFile(doc.text, doc.filePath);
+      if (!path) return;
+      clearSessionPassword();
+      doc.markSaved(path);
+    },
+    [doc.text, doc.filePath, doc.markSaved, clearSessionPassword],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (doc.settings.id === "none") {
+      await writePlain(false);
+      return;
+    }
+    if (sessionPasswordRef.current) {
+      await writeLocked(sessionPasswordRef.current, false);
+      return;
+    }
+    setPasswordError(null);
+    setPasswordPrompt({ kind: "set", saveAs: false });
+  }, [doc.settings.id, writePlain, writeLocked]);
+
+  const handleSaveAs = useCallback(async () => {
+    if (doc.settings.id === "none") {
+      await writePlain(true);
+      return;
+    }
+    if (sessionPasswordRef.current) {
+      await writeLocked(sessionPasswordRef.current, true);
+      return;
+    }
+    setPasswordError(null);
+    setPasswordPrompt({ kind: "set", saveAs: true });
+  }, [doc.settings.id, writePlain, writeLocked]);
+
+  const handlePasswordConfirm = useCallback(
+    async (password: string) => {
+      if (!passwordPrompt) return;
+      setPasswordBusy(true);
+      setPasswordError(null);
+      try {
+        if (passwordPrompt.kind === "unlock") {
+          const payload = await unlockVault(
+            passwordPrompt.pending.contents,
+            password,
+          );
+          sessionPasswordRef.current = password;
+          doc.loadDocument(
+            payload.text,
+            passwordPrompt.pending.path,
+            payload.settings,
+          );
+          setPasswordPrompt(null);
+        } else {
+          const ok = await writeLocked(password, passwordPrompt.saveAs);
+          if (ok) setPasswordPrompt(null);
+        }
+      } catch (err) {
+        setPasswordError(
+          err instanceof Error ? err.message : "Could not use that password.",
+        );
+      } finally {
+        setPasswordBusy(false);
+      }
+    },
+    [passwordPrompt, doc.loadDocument, writeLocked],
   );
 
   const handleSettingsChange = useCallback(
@@ -61,22 +178,30 @@ function App() {
       if (settings.id === "none" && doc.viewMode !== "plain") {
         doc.setViewMode("plain");
       }
+      // Switching into or out of locked saves invalidates a prior password
+      // only when leaving locked mode; staying locked can reuse the session.
+      if (settings.id === "none") {
+        clearSessionPassword();
+      }
       doc.setSettings(settings);
     },
-    [doc.setSettings, doc.setViewMode, doc.viewMode],
+    [doc.setSettings, doc.setViewMode, doc.viewMode, clearSessionPassword],
   );
 
-  const handleSave = useCallback(async () => {
-    const contents = encrypt(doc.text, doc.settings);
-    const path = await saveTextFile(contents, doc.filePath);
-    if (path) doc.markSaved(path);
-  }, [doc.text, doc.settings, doc.filePath, doc.markSaved]);
+  const openFind = useCallback((preferReplace = false) => {
+    setFindPreferReplace(preferReplace);
+    setFindOpen(true);
+    setFindNonce((n) => n + 1);
+  }, []);
 
-  const handleSaveAs = useCallback(async () => {
-    const contents = encrypt(doc.text, doc.settings);
-    const path = await saveTextFileAs(contents);
-    if (path) doc.markSaved(path);
-  }, [doc.text, doc.settings, doc.markSaved]);
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    editorRef.current?.focus();
+  }, []);
+
+  const selectMatch = useCallback((start: number, end: number) => {
+    editorRef.current?.selectRange(start, end);
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -114,6 +239,12 @@ function App() {
         case "edit-redo":
           doc.redo();
           break;
+        case "edit-find":
+          openFind(false);
+          break;
+        case "edit-replace":
+          openFind(true);
+          break;
         case "view-plain":
           doc.setViewMode("plain");
           break;
@@ -140,11 +271,12 @@ function App() {
     handleOpen,
     handleSave,
     handleSaveAs,
+    openFind,
   ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (pendingOpen) return;
+      if (passwordPrompt) return;
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key === "s") {
         e.preventDefault();
@@ -156,6 +288,12 @@ function App() {
       } else if (meta && e.key === "n") {
         e.preventDefault();
         void handleNew();
+      } else if (meta && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        openFind(false);
+      } else if (meta && (e.key === "h" || e.key === "H")) {
+        e.preventDefault();
+        openFind(true);
       } else if (meta && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         if (e.shiftKey) doc.redo();
@@ -180,7 +318,7 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
-    pendingOpen,
+    passwordPrompt,
     doc.setViewMode,
     doc.undo,
     doc.redo,
@@ -189,14 +327,11 @@ function App() {
     handleOpen,
     handleSave,
     handleSaveAs,
+    openFind,
   ]);
 
-  const pendingName = pendingOpen
-    ? pendingOpen.path.split(/[/\\]/).pop() ?? pendingOpen.path
-    : "";
-
   return (
-    <div className="app">
+    <div className={`app${findOpen ? " app-with-find" : ""}`}>
       <Toolbar
         settings={doc.settings}
         viewMode={doc.viewMode}
@@ -212,9 +347,21 @@ function App() {
         onRedo={doc.redo}
       />
 
+      {findOpen && (
+        <FindReplaceBar
+          key={findNonce}
+          text={doc.text}
+          preferReplaceFocus={findPreferReplace}
+          onReplaceText={doc.setText}
+          onSelectMatch={selectMatch}
+          onClose={closeFind}
+        />
+      )}
+
       <main className="workspace">
         {doc.viewMode === "plain" && (
           <EditorPane
+            ref={editorRef}
             label="Plain"
             value={doc.text}
             onChange={doc.setText}
@@ -222,24 +369,36 @@ function App() {
         )}
         {doc.viewMode === "encrypted" && (
           <EditorPane
+            ref={editorRef}
             label="Encrypted"
             value={doc.ciphertext}
-            onChange={(next) =>
-              doc.setText(
-                plaintextFromEncryptedEdit(doc.text, doc.ciphertext, next),
-              )
+            readOnly={!allowsEncryptedEdit}
+            onChange={
+              allowsEncryptedEdit
+                ? (next) =>
+                    doc.setText(
+                      plaintextFromEncryptedEdit(
+                        doc.text,
+                        doc.ciphertext,
+                        next,
+                      ),
+                    )
+                : undefined
             }
           />
         )}
         {doc.viewMode === "side-by-side" && (
           <SideBySide
+            ref={editorRef}
             plain={doc.text}
             encrypted={doc.ciphertext}
+            encryptedEditable={allowsEncryptedEdit}
             onPlainChange={doc.setText}
           />
         )}
         {doc.viewMode === "reveal" && (
           <RevealView
+            ref={editorRef}
             plain={doc.text}
             encrypted={doc.ciphertext}
             onPlainChange={doc.setText}
@@ -254,12 +413,22 @@ function App() {
         filePath={doc.filePath}
       />
 
-      {pendingOpen && (
-        <OpenDecryptDialog
-          fileName={pendingName}
-          initialSettings={doc.settings}
-          onConfirm={handleOpenConfirm}
-          onCancel={() => setPendingOpen(null)}
+      {passwordPrompt && (
+        <PasswordDialog
+          mode={passwordPrompt.kind === "unlock" ? "unlock" : "set"}
+          fileName={
+            passwordPrompt.kind === "unlock"
+              ? fileName(passwordPrompt.pending.path)
+              : undefined
+          }
+          error={passwordError}
+          busy={passwordBusy}
+          onConfirm={(password) => void handlePasswordConfirm(password)}
+          onCancel={() => {
+            if (passwordBusy) return;
+            setPasswordPrompt(null);
+            setPasswordError(null);
+          }}
         />
       )}
     </div>

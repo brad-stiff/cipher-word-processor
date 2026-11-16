@@ -1,10 +1,13 @@
 import {
+  forwardRef,
   useCallback,
+  useImperativeHandle,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type UIEvent,
 } from "react";
+import type { EditorPaneHandle } from "./EditorPane";
 
 interface RevealViewProps {
   plain: string;
@@ -12,11 +15,8 @@ interface RevealViewProps {
   onPlainChange: (value: string) => void;
 }
 
-export function RevealView({
-  plain,
-  encrypted,
-  onPlainChange,
-}: RevealViewProps) {
+export const RevealView = forwardRef<EditorPaneHandle, RevealViewProps>(
+  function RevealView({ plain, encrypted, onPlainChange }, ref) {
   const [split, setSplit] = useState(0.45);
   const containerRef = useRef<HTMLDivElement>(null);
   const encryptedRef = useRef<HTMLPreElement>(null);
@@ -39,6 +39,32 @@ export function RevealView({
       syncing.current = false;
     });
   }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => {
+        inputRef.current?.focus();
+      },
+      selectRange: (start: number, end: number) => {
+        const el = inputRef.current;
+        if (!el) return;
+        const s = Math.max(0, Math.min(start, plain.length));
+        const e = Math.max(0, Math.min(end, plain.length));
+        el.focus();
+        el.setSelectionRange(s, e);
+        const before = plain.slice(0, s);
+        const line = before.split("\n").length;
+        const lineHeight = Number.parseFloat(
+          getComputedStyle(el).lineHeight || "20",
+        );
+        const targetTop = (line - 1) * lineHeight - el.clientHeight / 3;
+        el.scrollTop = Math.max(0, targetTop);
+        syncScrollFromInput();
+      },
+    }),
+    [plain.length, syncScrollFromInput],
+  );
 
   const onInputScroll = useCallback(
     (_e: UIEvent<HTMLTextAreaElement>) => {
@@ -156,4 +182,4 @@ export function RevealView({
       </div>
     </div>
   );
-}
+});

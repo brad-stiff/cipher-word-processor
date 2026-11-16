@@ -1,6 +1,7 @@
 export {
   CIPHERS,
   DEFAULT_SETTINGS,
+  cipherPreservesLength,
   type CipherDefinition,
   type CipherId,
   type CipherSettings,

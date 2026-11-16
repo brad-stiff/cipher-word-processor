@@ -45,6 +45,10 @@ body {
   min-height: 0;
 }
 
+.app-with-find {
+  grid-template-rows: auto auto 1fr auto;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -157,6 +161,64 @@ body {
 .view-switch button.active {
   background: var(--accent);
   color: #f4fffd;
+}
+
+.find-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.find-field input[type="text"] {
+  width: 9rem;
+}
+
+.find-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.find-status {
+  min-width: 5.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.find-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.find-actions button {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.find-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+
+.find-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .workspace {
@@ -389,6 +451,36 @@ body {
   flex-wrap: wrap;
   gap: 0.65rem 0.85rem;
   margin-bottom: 1.1rem;
+}
+
+.password-fields {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.password-fields .field {
+  width: 100%;
+}
+
+.password-fields .field input[type="password"] {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.modal-error {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.password-form .modal-actions {
+  margin-top: 0.25rem;
 }
 
 .modal-actions {

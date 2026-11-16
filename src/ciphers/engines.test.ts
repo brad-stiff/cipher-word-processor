@@ -7,7 +7,7 @@ import {
   rot13,
   vigenere,
 } from "./engines";
-import type { CipherSettings } from "./types";
+import { CIPHERS, type CipherSettings } from "./types";
 
 describe("caesar", () => {
   it("shifts letters and preserves punctuation", () => {
@@ -86,5 +86,25 @@ describe("encrypt / decrypt", () => {
     const settings: CipherSettings = { id: "none", shift: 3, keyword: "KEY" };
     expect(encrypt("Hello", settings)).toBe("Hello");
     expect(decrypt("Hello", settings)).toBe("Hello");
+  });
+});
+
+describe("preservesLength contract", () => {
+  it("declares preservesLength on every cipher", () => {
+    for (const cipher of CIPHERS) {
+      expect(typeof cipher.preservesLength).toBe("boolean");
+    }
+  });
+
+  it("keeps length for every length-preserving cipher", () => {
+    const plain = "Pack my box with five dozen liquor jugs!";
+    for (const cipher of CIPHERS.filter((c) => c.preservesLength)) {
+      const settings: CipherSettings = {
+        id: cipher.id,
+        shift: 5,
+        keyword: "CIPHER",
+      };
+      expect(encrypt(plain, settings).length).toBe(plain.length);
+    }
   });
 });
