@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadPreferences, savePreferences } from "./preferences";
-import { DEFAULT_SETTINGS } from "../ciphers";
+import { DEFAULT_SETTINGS, normalizeCipherSettings } from "../ciphers";
 
 const memory = new Map<string, string>();
 
@@ -29,19 +29,28 @@ describe("preferences", () => {
   });
 
   it("round-trips valid preferences", () => {
+    const settings = normalizeCipherSettings({
+      id: "vigenere",
+      shift: 0,
+      keyword: "LEMON",
+    });
     savePreferences({
-      settings: { id: "vigenere", shift: 0, keyword: "LEMON" },
+      settings,
       viewMode: "reveal",
     });
     expect(loadPreferences()).toEqual({
-      settings: { id: "vigenere", shift: 0, keyword: "LEMON" },
+      settings,
       viewMode: "reveal",
     });
   });
 
   it("accepts none cipher", () => {
     savePreferences({
-      settings: { id: "none", shift: 3, keyword: "KEY" },
+      settings: normalizeCipherSettings({
+        id: "none",
+        shift: 3,
+        keyword: "KEY",
+      }),
       viewMode: "plain",
     });
     expect(loadPreferences().settings.id).toBe("none");
@@ -56,7 +65,11 @@ describe("preferences", () => {
       }),
     );
     expect(loadPreferences()).toEqual({
-      settings: { id: "caesar", shift: 25, keyword: "X" },
+      settings: normalizeCipherSettings({
+        id: "caesar",
+        shift: 25,
+        keyword: "X",
+      }),
       viewMode: "plain",
     });
   });

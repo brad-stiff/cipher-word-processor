@@ -31,6 +31,34 @@ pub fn run() {
                 true,
                 Some("CmdOrCtrl+Shift+S"),
             )?;
+            let change_pw_i = MenuItem::with_id(
+                app,
+                "file-change-password",
+                "Change Password…",
+                true,
+                None::<&str>,
+            )?;
+            let close_tab_i = MenuItem::with_id(
+                app,
+                "file-close-tab",
+                "Close Tab",
+                true,
+                Some("CmdOrCtrl+W"),
+            )?;
+            let export_i = MenuItem::with_id(
+                app,
+                "file-export-ciphertext",
+                "Export Ciphertext…",
+                true,
+                None::<&str>,
+            )?;
+            let print_i = MenuItem::with_id(
+                app,
+                "file-print",
+                "Print…",
+                true,
+                Some("CmdOrCtrl+P"),
+            )?;
             let sep = PredefinedMenuItem::separator(app)?;
             let quit_i = PredefinedMenuItem::quit(app, Some("Quit"))?;
 
@@ -38,7 +66,18 @@ pub fn run() {
                 app,
                 "File",
                 true,
-                &[&new_i, &open_i, &save_i, &save_as_i, &sep, &quit_i],
+                &[
+                    &new_i,
+                    &open_i,
+                    &close_tab_i,
+                    &save_i,
+                    &save_as_i,
+                    &change_pw_i,
+                    &export_i,
+                    &print_i,
+                    &sep,
+                    &quit_i,
+                ],
             )?;
 
             let undo_i =
@@ -98,7 +137,17 @@ pub fn run() {
                 &[&view_plain, &view_enc, &view_side, &view_reveal],
             )?;
 
-            let menu = Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu])?;
+            let cheat_i = MenuItem::with_id(
+                app,
+                "help-cheat-sheet",
+                "Cipher Cheat Sheet…",
+                true,
+                Some("CmdOrCtrl+/"),
+            )?;
+            let help_menu = Submenu::with_items(app, "Help", true, &[&cheat_i])?;
+
+            let menu =
+                Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &help_menu])?;
             app.set_menu(menu)?;
 
             Ok(())

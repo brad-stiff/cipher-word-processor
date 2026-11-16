@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  affine,
   atbash,
   caesar,
   decrypt,
   encrypt,
+  playfair,
+  railFence,
   rot13,
+  substitution,
   vigenere,
 } from "./engines";
-import { CIPHERS, type CipherSettings } from "./types";
+import { DEFAULT_SETTINGS, CIPHERS, type CipherSettings } from "./types";
+
+function withId(
+  id: CipherSettings["id"],
+  patch: Partial<CipherSettings> = {},
+): CipherSettings {
+  return { ...DEFAULT_SETTINGS, id, ...patch };
+}
 
 describe("caesar", () => {
   it("shifts letters and preserves punctuation", () => {
@@ -66,13 +77,67 @@ describe("vigenere", () => {
   });
 });
 
+describe("affine", () => {
+  it("encrypts with a=5, b=8", () => {
+    expect(affine("AFFINE", 5, 8)).toBe("IHHWVC");
+  });
+
+  it("round-trips", () => {
+    const plain = "Affine Cipher 123!";
+    expect(affine(affine(plain, 7, 3), 7, 3, true)).toBe(plain);
+  });
+});
+
+describe("substitution", () => {
+  it("maps by key and round-trips", () => {
+    const key = "QWERTYUIOPASDFGHJKLZXCVBNM";
+    const plain = "Hello, Alphabet!";
+    expect(substitution(substitution(plain, key), key, true)).toBe(plain);
+  });
+});
+
+describe("railFence", () => {
+  it("encrypts a classic example", () => {
+    expect(railFence("WEAREDISCOVEREDFLEEATONCE", 3)).toBe(
+      "WECRLTEERDSOEEFEAOCAIVDEN",
+    );
+  });
+
+  it("round-trips with punctuation", () => {
+    const plain = "Hello, Rail Fence!";
+    expect(railFence(railFence(plain, 4), 4, true)).toBe(plain);
+  });
+});
+
+describe("playfair", () => {
+  it("encrypts a classic instruments example", () => {
+    expect(playfair("INSTRUMENTS", "MONARCHY")).toBe("GATLMZCLRQXA");
+  });
+
+  it("round-trips letters that need no padding", () => {
+    const plain = "BALLOON"; // will insert X between L L
+    const cipher = playfair(plain, "MONARCHY");
+    const back = playfair(cipher, "MONARCHY", true);
+    // Recovered form includes Playfair X padding / I-J normalization
+    expect(playfair(back, "MONARCHY")).toBe(cipher);
+  });
+
+  it("preserves non-letters in place when lengths allow", () => {
+    const cipher = playfair("HI!", "KEY");
+    expect(cipher.includes("!")).toBe(true);
+  });
+});
+
 describe("encrypt / decrypt", () => {
   const cases: CipherSettings[] = [
-    { id: "none", shift: 0, keyword: "" },
-    { id: "caesar", shift: 5, keyword: "" },
-    { id: "rot13", shift: 0, keyword: "" },
-    { id: "atbash", shift: 0, keyword: "" },
-    { id: "vigenere", shift: 0, keyword: "CIPHER" },
+    withId("none"),
+    withId("caesar", { shift: 5 }),
+    withId("rot13"),
+    withId("atbash"),
+    withId("vigenere", { keyword: "CIPHER" }),
+    withId("affine", { affineA: 7, affineB: 3 }),
+    withId("substitution"),
+    withId("railfence", { rails: 4 }),
   ];
 
   for (const settings of cases) {
@@ -82,29 +147,47 @@ describe("encrypt / decrypt", () => {
     });
   }
 
+  it("playfair encrypt/decrypt are inverses on ciphertext", () => {
+    const settings = withId("playfair", { keyword: "MONARCHY" });
+    const plain = "Pack my box with five dozen liquor jugs.";
+    const cipher = encrypt(plain, settings);
+    expect(encrypt(decrypt(cipher, settings), settings)).toBe(cipher);
+  });
+
   it("none leaves text unchanged", () => {
-    const settings: CipherSettings = { id: "none", shift: 3, keyword: "KEY" };
+    const settings = withId("none");
     expect(encrypt("Hello", settings)).toBe("Hello");
     expect(decrypt("Hello", settings)).toBe("Hello");
   });
 });
 
 describe("preservesLength contract", () => {
-  it("declares preservesLength on every cipher", () => {
+  it("declares preservesLength and formula on every cipher", () => {
     for (const cipher of CIPHERS) {
       expect(typeof cipher.preservesLength).toBe("boolean");
+      expect(cipher.formula.length).toBeGreaterThan(0);
     }
   });
 
   it("keeps length for every length-preserving cipher", () => {
     const plain = "Pack my box with five dozen liquor jugs!";
     for (const cipher of CIPHERS.filter((c) => c.preservesLength)) {
-      const settings: CipherSettings = {
-        id: cipher.id,
+      const settings = withId(cipher.id, {
         shift: 5,
         keyword: "CIPHER",
-      };
+        affineA: 5,
+        affineB: 8,
+      });
       expect(encrypt(plain, settings).length).toBe(plain.length);
     }
+  });
+
+  it("marks rail fence and playfair as non-preserving for edit safety", () => {
+    expect(CIPHERS.find((c) => c.id === "railfence")?.preservesLength).toBe(
+      false,
+    );
+    expect(CIPHERS.find((c) => c.id === "playfair")?.preservesLength).toBe(
+      false,
+    );
   });
 });

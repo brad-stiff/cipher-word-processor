@@ -1,6 +1,5 @@
 import {
-  DEFAULT_SETTINGS,
-  type CipherId,
+  normalizeCipherSettings,
   type CipherSettings,
 } from "../ciphers";
 
@@ -11,14 +10,6 @@ export const VAULT_EXTENSION = "cwp";
 const PBKDF2_ITERATIONS = 310_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
-
-const CIPHER_IDS: CipherId[] = [
-  "none",
-  "caesar",
-  "rot13",
-  "atbash",
-  "vigenere",
-];
 
 export interface VaultPayload {
   text: string;
@@ -55,22 +46,6 @@ function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy;
-}
-
-function normalizeSettings(raw: unknown): CipherSettings {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_SETTINGS };
-  const obj = raw as Record<string, unknown>;
-  const id =
-    typeof obj.id === "string" && CIPHER_IDS.includes(obj.id as CipherId)
-      ? (obj.id as CipherId)
-      : DEFAULT_SETTINGS.id;
-  const shift =
-    typeof obj.shift === "number" && Number.isFinite(obj.shift)
-      ? Math.min(25, Math.max(0, Math.trunc(obj.shift)))
-      : DEFAULT_SETTINGS.shift;
-  const keyword =
-    typeof obj.keyword === "string" ? obj.keyword : DEFAULT_SETTINGS.keyword;
-  return { id, shift, keyword };
 }
 
 export function isVaultFile(contents: string): boolean {
@@ -208,7 +183,7 @@ export async function unlockVault(
 
   return {
     text: typeof payload.text === "string" ? payload.text : "",
-    settings: normalizeSettings(payload.settings),
+    settings: normalizeCipherSettings(payload.settings),
   };
 }
 

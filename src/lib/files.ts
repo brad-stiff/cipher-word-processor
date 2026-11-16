@@ -1,4 +1,4 @@
-import { open, save, ask } from "@tauri-apps/plugin-dialog";
+import { open, save, ask, message } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { VAULT_EXTENSION } from "./vault";
 
@@ -25,6 +25,21 @@ export async function confirmDiscard(dirty: boolean): Promise<boolean> {
   });
 }
 
+export async function showInfo(body: string, title: string): Promise<void> {
+  await message(body, { title, kind: "info" });
+}
+
+export async function readTextFile(path: string): Promise<string> {
+  return invoke<string>("read_text_file", { path });
+}
+
+export async function writeTextFile(
+  path: string,
+  contents: string,
+): Promise<void> {
+  await invoke("write_text_file", { path, contents });
+}
+
 export async function openDocumentFile(): Promise<{
   path: string;
   contents: string;
@@ -35,7 +50,7 @@ export async function openDocumentFile(): Promise<{
     filters: [OPEN_FILTER, TXT_FILTER, CWP_FILTER],
   });
   if (!path || Array.isArray(path)) return null;
-  const contents = await invoke<string>("read_text_file", { path });
+  const contents = await readTextFile(path);
   return { path, contents };
 }
 
@@ -53,7 +68,7 @@ export async function savePlainTextFile(
     });
   }
   if (!path) return null;
-  await invoke("write_text_file", { path, contents });
+  await writeTextFile(path, contents);
   return path;
 }
 
@@ -65,7 +80,7 @@ export async function savePlainTextFileAs(
     defaultPath: "document.txt",
   });
   if (!path) return null;
-  await invoke("write_text_file", { path, contents });
+  await writeTextFile(path, contents);
   return path;
 }
 
@@ -83,7 +98,7 @@ export async function saveLockedFile(
     });
   }
   if (!path) return null;
-  await invoke("write_text_file", { path, contents });
+  await writeTextFile(path, contents);
   return path;
 }
 
@@ -95,6 +110,19 @@ export async function saveLockedFileAs(
     defaultPath: `document.${VAULT_EXTENSION}`,
   });
   if (!path) return null;
-  await invoke("write_text_file", { path, contents });
+  await writeTextFile(path, contents);
+  return path;
+}
+
+/** Write classical ciphertext to a separate .txt — does not change the open document path. */
+export async function exportCiphertextFile(
+  contents: string,
+): Promise<string | null> {
+  const path = await save({
+    filters: [TXT_FILTER],
+    defaultPath: "ciphertext.txt",
+  });
+  if (!path) return null;
+  await writeTextFile(path, contents);
   return path;
 }

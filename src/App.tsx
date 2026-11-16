@@ -2,28 +2,46 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Toolbar } from "./components/Toolbar";
+import { TabBar } from "./components/TabBar";
 import { StatusBar } from "./components/StatusBar";
 import { EditorPane, type EditorPaneHandle } from "./components/EditorPane";
 import { SideBySide } from "./components/SideBySide";
 import { RevealView } from "./components/RevealView";
 import { PasswordDialog } from "./components/PasswordDialog";
+import { ChangePasswordDialog } from "./components/ChangePasswordDialog";
+import { CheatSheetDialog } from "./components/CheatSheetDialog";
+import {
+  PrintDialog,
+  type PrintLayout,
+} from "./components/PrintDialog";
 import { FindReplaceBar } from "./components/FindReplaceBar";
 import { useDocument } from "./hooks/useDocument";
 import {
+  CIPHERS,
   cipherPreservesLength,
   DEFAULT_SETTINGS,
   type CipherSettings,
 } from "./ciphers";
 import {
   confirmDiscard,
+  exportCiphertextFile,
   openDocumentFile,
+  readTextFile,
   saveLockedFile,
   saveLockedFileAs,
   savePlainTextFile,
   savePlainTextFileAs,
+  showInfo,
+  writeTextFile,
 } from "./lib/files";
 import { plaintextFromEncryptedEdit } from "./lib/encryptedEdit";
-import { isVaultFile, sealVault, unlockVault } from "./lib/vault";
+import {
+  isVaultFile,
+  pathLooksLocked,
+  sealVault,
+  unlockVault,
+} from "./lib/vault";
+import { tabTitle } from "./lib/tabs";
 import "./App.css";
 
 interface PendingUnlock {
@@ -36,13 +54,15 @@ type PasswordPrompt =
   | { kind: "set"; saveAs: boolean };
 
 function fileName(path: string): string {
-  return path.split(/[/\\]/).pop() ?? path;
+  return tabTitle(path);
 }
 
 function App() {
   const doc = useDocument();
-  const dirtyRef = useRef(doc.dirty);
-  dirtyRef.current = doc.dirty;
+  const anyDirtyRef = useRef(doc.anyDirty);
+  anyDirtyRef.current = doc.anyDirty;
+  const activeIdRef = useRef(doc.activeId);
+  activeIdRef.current = doc.activeId;
 
   const [findOpen, setFindOpen] = useState(false);
   const [findPreferReplace, setFindPreferReplace] = useState(false);
@@ -52,23 +72,38 @@ function App() {
   );
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(
+    null,
+  );
+  const [changePasswordBusy, setChangePasswordBusy] = useState(false);
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printLayout, setPrintLayout] = useState<PrintLayout>("plain");
+  const [printNonce, setPrintNonce] = useState(0);
 
   const editorRef = useRef<EditorPaneHandle>(null);
-  const sessionPasswordRef = useRef<string | null>(null);
+  const sessionPasswordsRef = useRef<Map<string, string>>(new Map());
   const allowsEncryptedEdit = cipherPreservesLength(doc.settings.id);
 
-  const clearSessionPassword = useCallback(() => {
-    sessionPasswordRef.current = null;
+  const getSessionPassword = useCallback(
+    () => sessionPasswordsRef.current.get(activeIdRef.current) ?? null,
+    [],
+  );
+
+  const setSessionPassword = useCallback((tabId: string, password: string) => {
+    sessionPasswordsRef.current.set(tabId, password);
   }, []);
 
-  const handleNew = useCallback(async () => {
-    if (!(await confirmDiscard(doc.dirty))) return;
-    clearSessionPassword();
+  const clearSessionPassword = useCallback((tabId?: string) => {
+    sessionPasswordsRef.current.delete(tabId ?? activeIdRef.current);
+  }, []);
+
+  const handleNew = useCallback(() => {
     doc.newDocument();
-  }, [doc.dirty, doc.newDocument, clearSessionPassword]);
+  }, [doc.newDocument]);
 
   const handleOpen = useCallback(async () => {
-    if (!(await confirmDiscard(doc.dirty))) return;
     const file = await openDocumentFile();
     if (!file) return;
 
@@ -78,12 +113,12 @@ function App() {
       return;
     }
 
-    clearSessionPassword();
-    doc.loadDocument(file.contents, file.path, {
+    const tabId = doc.loadDocument(file.contents, file.path, {
       ...DEFAULT_SETTINGS,
       id: "none",
     });
-  }, [doc.dirty, doc.loadDocument, clearSessionPassword]);
+    clearSessionPassword(tabId);
+  }, [doc.loadDocument, clearSessionPassword]);
 
   const writeLocked = useCallback(
     async (password: string, saveAs: boolean) => {
@@ -95,11 +130,11 @@ function App() {
         ? await saveLockedFileAs(contents)
         : await saveLockedFile(contents, doc.filePath);
       if (!path) return false;
-      sessionPasswordRef.current = password;
+      setSessionPassword(activeIdRef.current, password);
       doc.markSaved(path);
       return true;
     },
-    [doc.text, doc.settings, doc.filePath, doc.markSaved],
+    [doc.text, doc.settings, doc.filePath, doc.markSaved, setSessionPassword],
   );
 
   const writePlain = useCallback(
@@ -119,26 +154,119 @@ function App() {
       await writePlain(false);
       return;
     }
-    if (sessionPasswordRef.current) {
-      await writeLocked(sessionPasswordRef.current, false);
+    const existing = getSessionPassword();
+    if (existing) {
+      await writeLocked(existing, false);
       return;
     }
     setPasswordError(null);
     setPasswordPrompt({ kind: "set", saveAs: false });
-  }, [doc.settings.id, writePlain, writeLocked]);
+  }, [doc.settings.id, writePlain, writeLocked, getSessionPassword]);
 
   const handleSaveAs = useCallback(async () => {
     if (doc.settings.id === "none") {
       await writePlain(true);
       return;
     }
-    if (sessionPasswordRef.current) {
-      await writeLocked(sessionPasswordRef.current, true);
+    const existing = getSessionPassword();
+    if (existing) {
+      await writeLocked(existing, true);
       return;
     }
     setPasswordError(null);
     setPasswordPrompt({ kind: "set", saveAs: true });
-  }, [doc.settings.id, writePlain, writeLocked]);
+  }, [doc.settings.id, writePlain, writeLocked, getSessionPassword]);
+
+  const handleExportCiphertext = useCallback(async () => {
+    await exportCiphertextFile(doc.ciphertext);
+  }, [doc.ciphertext]);
+
+  const handleChangePasswordMenu = useCallback(async () => {
+    if (doc.settings.id === "none") {
+      await showInfo(
+        "Change Password is only available when a classical cipher is active.",
+        "Change Password",
+      );
+      return;
+    }
+    if (!pathLooksLocked(doc.filePath) && !getSessionPassword()) {
+      await showInfo(
+        "Save a locked .cwp file first to set a password, then you can change it here.",
+        "Change Password",
+      );
+      return;
+    }
+    setChangePasswordError(null);
+    setChangePasswordOpen(true);
+  }, [doc.settings.id, doc.filePath, getSessionPassword]);
+
+  const handleChangePasswordConfirm = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      setChangePasswordBusy(true);
+      setChangePasswordError(null);
+      try {
+        if (pathLooksLocked(doc.filePath) && doc.filePath) {
+          const onDisk = await readTextFile(doc.filePath);
+          await unlockVault(onDisk, currentPassword);
+          const sealed = await sealVault(
+            { text: doc.text, settings: doc.settings },
+            newPassword,
+          );
+          await writeTextFile(doc.filePath, sealed);
+          setSessionPassword(activeIdRef.current, newPassword);
+          doc.markSaved(doc.filePath);
+        } else {
+          const session = getSessionPassword();
+          if (session === null || session !== currentPassword) {
+            throw new Error("Incorrect password.");
+          }
+          setSessionPassword(activeIdRef.current, newPassword);
+        }
+        setChangePasswordOpen(false);
+      } catch (err) {
+        setChangePasswordError(
+          err instanceof Error ? err.message : "Could not change password.",
+        );
+      } finally {
+        setChangePasswordBusy(false);
+      }
+    },
+    [
+      doc.filePath,
+      doc.text,
+      doc.settings,
+      doc.markSaved,
+      getSessionPassword,
+      setSessionPassword,
+    ],
+  );
+
+  const handlePrint = useCallback(() => {
+    setPrintOpen(true);
+  }, []);
+
+  const handlePrintConfirm = useCallback((layout: PrintLayout) => {
+    setPrintLayout(layout);
+    setPrintOpen(false);
+    setPrintNonce((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    if (printNonce === 0) return;
+    const id = window.setTimeout(() => window.print(), 0);
+    return () => window.clearTimeout(id);
+  }, [printNonce]);
+
+  const handleCloseTab = useCallback(
+    async (id: string) => {
+      const tab = doc.tabs.find((t) => t.id === id);
+      if (!tab) return;
+      if (tab.dirty && !(await confirmDiscard(true))) return;
+      clearSessionPassword(id);
+      doc.closeTab(id);
+    },
+    [doc.tabs, doc.closeTab, clearSessionPassword],
+  );
 
   const handlePasswordConfirm = useCallback(
     async (password: string) => {
@@ -151,12 +279,12 @@ function App() {
             passwordPrompt.pending.contents,
             password,
           );
-          sessionPasswordRef.current = password;
-          doc.loadDocument(
+          const tabId = doc.loadDocument(
             payload.text,
             passwordPrompt.pending.path,
             payload.settings,
           );
+          setSessionPassword(tabId, password);
           setPasswordPrompt(null);
         } else {
           const ok = await writeLocked(password, passwordPrompt.saveAs);
@@ -170,7 +298,7 @@ function App() {
         setPasswordBusy(false);
       }
     },
-    [passwordPrompt, doc.loadDocument, writeLocked],
+    [passwordPrompt, doc.loadDocument, writeLocked, setSessionPassword],
   );
 
   const handleSettingsChange = useCallback(
@@ -178,8 +306,6 @@ function App() {
       if (settings.id === "none" && doc.viewMode !== "plain") {
         doc.setViewMode("plain");
       }
-      // Switching into or out of locked saves invalidates a prior password
-      // only when leaving locked mode; staying locked can reuse the session.
       if (settings.id === "none") {
         clearSessionPassword();
       }
@@ -207,7 +333,7 @@ function App() {
     let unlisten: (() => void) | undefined;
     void getCurrentWindow()
       .onCloseRequested(async (event) => {
-        if (!dirtyRef.current) return;
+        if (!anyDirtyRef.current) return;
         const allow = await confirmDiscard(true);
         if (!allow) event.preventDefault();
       })
@@ -222,7 +348,7 @@ function App() {
     void listen<string>("menu-action", (event) => {
       switch (event.payload) {
         case "file-new":
-          void handleNew();
+          handleNew();
           break;
         case "file-open":
           void handleOpen();
@@ -232,6 +358,18 @@ function App() {
           break;
         case "file-save-as":
           void handleSaveAs();
+          break;
+        case "file-change-password":
+          void handleChangePasswordMenu();
+          break;
+        case "file-close-tab":
+          void handleCloseTab(activeIdRef.current);
+          break;
+        case "file-export-ciphertext":
+          void handleExportCiphertext();
+          break;
+        case "file-print":
+          handlePrint();
           break;
         case "edit-undo":
           doc.undo();
@@ -257,6 +395,9 @@ function App() {
         case "view-reveal":
           if (doc.settings.id !== "none") doc.setViewMode("reveal");
           break;
+        case "help-cheat-sheet":
+          setCheatSheetOpen(true);
+          break;
       }
     }).then((fn) => {
       unlisten = fn;
@@ -271,12 +412,23 @@ function App() {
     handleOpen,
     handleSave,
     handleSaveAs,
+    handleChangePasswordMenu,
+    handleCloseTab,
+    handleExportCiphertext,
+    handlePrint,
     openFind,
   ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (passwordPrompt) return;
+      if (
+        passwordPrompt ||
+        changePasswordOpen ||
+        cheatSheetOpen ||
+        printOpen
+      ) {
+        return;
+      }
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key === "s") {
         e.preventDefault();
@@ -287,7 +439,16 @@ function App() {
         void handleOpen();
       } else if (meta && e.key === "n") {
         e.preventDefault();
-        void handleNew();
+        handleNew();
+      } else if (meta && (e.key === "w" || e.key === "W")) {
+        e.preventDefault();
+        void handleCloseTab(activeIdRef.current);
+      } else if (meta && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        handlePrint();
+      } else if (meta && e.key === "/") {
+        e.preventDefault();
+        setCheatSheetOpen(true);
       } else if (meta && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         openFind(false);
@@ -319,6 +480,9 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [
     passwordPrompt,
+    changePasswordOpen,
+    cheatSheetOpen,
+    printOpen,
     doc.setViewMode,
     doc.undo,
     doc.redo,
@@ -327,11 +491,21 @@ function App() {
     handleOpen,
     handleSave,
     handleSaveAs,
+    handleCloseTab,
+    handlePrint,
     openFind,
   ]);
 
+  const appClass = [
+    "app",
+    "app-with-tabs",
+    findOpen ? "app-with-find" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={`app${findOpen ? " app-with-find" : ""}`}>
+    <div className={appClass}>
       <Toolbar
         settings={doc.settings}
         viewMode={doc.viewMode}
@@ -339,7 +513,7 @@ function App() {
         canRedo={doc.canRedo}
         onSettingsChange={handleSettingsChange}
         onViewModeChange={doc.setViewMode}
-        onNew={() => void handleNew()}
+        onNew={handleNew}
         onOpen={() => void handleOpen()}
         onSave={() => void handleSave()}
         onSaveAs={() => void handleSaveAs()}
@@ -347,9 +521,17 @@ function App() {
         onRedo={doc.redo}
       />
 
+      <TabBar
+        tabs={doc.tabs}
+        activeId={doc.activeId}
+        onSelect={doc.setActiveId}
+        onClose={(id) => void handleCloseTab(id)}
+        onNew={handleNew}
+      />
+
       {findOpen && (
         <FindReplaceBar
-          key={findNonce}
+          key={`${doc.activeId}-${findNonce}`}
           text={doc.text}
           preferReplaceFocus={findPreferReplace}
           onReplaceText={doc.setText}
@@ -358,7 +540,7 @@ function App() {
         />
       )}
 
-      <main className="workspace">
+      <main className="workspace" key={doc.activeId}>
         {doc.viewMode === "plain" && (
           <EditorPane
             ref={editorRef}
@@ -431,6 +613,71 @@ function App() {
           }}
         />
       )}
+
+      {changePasswordOpen && (
+        <ChangePasswordDialog
+          fileName={
+            pathLooksLocked(doc.filePath) && doc.filePath
+              ? fileName(doc.filePath)
+              : undefined
+          }
+          error={changePasswordError}
+          busy={changePasswordBusy}
+          onConfirm={(currentPassword, newPassword) =>
+            void handleChangePasswordConfirm(currentPassword, newPassword)
+          }
+          onCancel={() => {
+            if (changePasswordBusy) return;
+            setChangePasswordOpen(false);
+            setChangePasswordError(null);
+          }}
+        />
+      )}
+
+      {cheatSheetOpen && (
+        <CheatSheetDialog
+          settings={doc.settings}
+          onClose={() => setCheatSheetOpen(false)}
+        />
+      )}
+
+      {printOpen && (
+        <PrintDialog
+          settings={doc.settings}
+          onConfirm={handlePrintConfirm}
+          onCancel={() => setPrintOpen(false)}
+        />
+      )}
+
+      <div
+        className={`print-sheet print-layout-${printLayout}`}
+        aria-hidden="true"
+      >
+        <header className="print-meta">
+          <span>
+            {doc.filePath ? fileName(doc.filePath) : "Untitled"}
+          </span>
+          <span>
+            {CIPHERS.find((c) => c.id === doc.settings.id)?.name ?? "Cipher"}
+          </span>
+        </header>
+        {printLayout === "side" ? (
+          <div className="print-side">
+            <section>
+              <h1>Plain</h1>
+              <pre>{doc.text}</pre>
+            </section>
+            <section>
+              <h1>Encrypted</h1>
+              <pre>{doc.ciphertext}</pre>
+            </section>
+          </div>
+        ) : (
+          <pre>
+            {printLayout === "cipher" ? doc.ciphertext : doc.text}
+          </pre>
+        )}
+      </div>
     </div>
   );
 }

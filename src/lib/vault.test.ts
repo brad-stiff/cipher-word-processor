@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { normalizeCipherSettings } from "../ciphers";
 import { isVaultFile, sealVault, unlockVault } from "./vault";
 
 describe("vault", () => {
   it("round-trips text and cipher settings", async () => {
+    const settings = normalizeCipherSettings({
+      id: "vigenere",
+      shift: 3,
+      keyword: "LEMON",
+    });
     const sealed = await sealVault(
       {
         text: "Attack at dawn",
-        settings: { id: "vigenere", shift: 3, keyword: "LEMON" },
+        settings,
       },
       "correct horse battery",
     );
@@ -17,18 +23,18 @@ describe("vault", () => {
 
     const opened = await unlockVault(sealed, "correct horse battery");
     expect(opened.text).toBe("Attack at dawn");
-    expect(opened.settings).toEqual({
-      id: "vigenere",
-      shift: 3,
-      keyword: "LEMON",
-    });
+    expect(opened.settings).toEqual(settings);
   });
 
   it("rejects the wrong password", async () => {
     const sealed = await sealVault(
       {
         text: "secret",
-        settings: { id: "caesar", shift: 4, keyword: "" },
+        settings: normalizeCipherSettings({
+          id: "caesar",
+          shift: 4,
+          keyword: "",
+        }),
       },
       "right-password",
     );

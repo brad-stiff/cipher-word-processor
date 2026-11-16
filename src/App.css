@@ -45,8 +45,92 @@ body {
   min-height: 0;
 }
 
-.app-with-find {
+.app-with-tabs {
   grid-template-rows: auto auto 1fr auto;
+}
+
+.app-with-tabs.app-with-find {
+  grid-template-rows: auto auto auto 1fr auto;
+}
+
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 0 0.35rem 0 0.5rem;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-bar-scroll {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  gap: 0.2rem;
+  padding: 0.3rem 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 12rem;
+  padding: 0.25rem 0.2rem 0.25rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 1 auto;
+}
+
+.tab:hover {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--ink);
+}
+
+.tab-active {
+  background: var(--surface);
+  border-color: var(--line);
+  border-bottom-color: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.tab-close,
+.tab-new {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tab-close:hover,
+.tab-new:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tab-new {
+  align-self: center;
+  margin-right: 0.25rem;
+  font-size: 1.1rem;
 }
 
 .toolbar {
@@ -74,6 +158,134 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
+}
+
+.cipher-help {
+  position: relative;
+}
+
+.cipher-help-toggle {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.cipher-help-toggle:hover,
+.cipher-help-toggle[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cipher-help-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 30;
+  width: min(22rem, 70vw);
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.cipher-help-title {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.cipher-help-body {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cipher-help-example {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+}
+
+.cipher-help-example > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.cipher-help-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cipher-help-example code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.print-sheet {
+  display: none;
+}
+
+.print-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1.1rem;
+}
+
+.print-option {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.print-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+
+.print-option-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.print-option input {
+  margin-top: 0.15rem;
+}
+
+.print-option strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.print-option-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .toolbar button,
@@ -136,6 +348,12 @@ body {
 
 .field input[type="text"] {
   width: 7rem;
+}
+
+.field-wide input.substitution-key {
+  width: 16rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .view-switch {
@@ -514,4 +732,212 @@ body {
 .modal-actions button.primary:hover {
   background: color-mix(in srgb, var(--accent) 88%, var(--ink));
   border-color: color-mix(in srgb, var(--accent) 88%, var(--ink));
+}
+
+.cheat-sheet-modal {
+  width: min(720px, 100%);
+  max-height: min(88vh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.1rem 1.05rem;
+}
+
+.cheat-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.cheat-sheet-header h2 {
+  margin: 0;
+}
+
+.cheat-sheet-header button {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cheat-sheet-header button:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+
+.cheat-sheet-intro {
+  margin-bottom: 0.75rem;
+}
+
+.cheat-sheet-body {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.85rem;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.cheat-sheet-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+  border-right: 1px solid var(--line);
+}
+
+.cheat-sheet-nav button {
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cheat-sheet-nav button:hover {
+  background: var(--accent-soft);
+}
+
+.cheat-sheet-nav-active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line)) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  font-weight: 600;
+}
+
+.cheat-sheet-detail {
+  overflow: auto;
+  min-height: 0;
+  padding-right: 0.15rem;
+}
+
+.cheat-sheet-detail h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.cheat-sheet-description {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cheat-sheet-block {
+  margin-bottom: 0.75rem;
+}
+
+.cheat-sheet-formula {
+  display: block;
+  margin-top: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.cheat-sheet-params {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+}
+
+.cheat-sheet-params code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.cheat-sheet-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .cheat-sheet-body {
+    grid-template-columns: 1fr;
+  }
+
+  .cheat-sheet-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.55rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .app > :not(.print-sheet) {
+    display: none !important;
+  }
+
+  .print-sheet {
+    display: block;
+    margin: 0;
+    padding: 0;
+    color: #000;
+  }
+
+  .print-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #bbb;
+    font-family: var(--font-ui);
+    font-size: 9pt;
+    color: #444;
+  }
+
+  .print-sheet > pre,
+  .print-side pre {
+    margin: 0;
+    padding: 0;
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+  }
+
+  .print-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .print-side section h1 {
+    margin: 0 0 0.4rem;
+    font-family: var(--font-ui);
+    font-size: 10pt;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #444;
+  }
+
+  .print-side section {
+    break-inside: avoid;
+  }
 }

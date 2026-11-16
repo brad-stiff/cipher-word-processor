@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { encrypt, type CipherSettings } from "../ciphers";
+import { DEFAULT_SETTINGS, encrypt, type CipherSettings } from "../ciphers";
 import { plaintextFromEncryptedEdit } from "./encryptedEdit";
 
-const caesar3: CipherSettings = { id: "caesar", shift: 3, keyword: "" };
+const caesar3: CipherSettings = { ...DEFAULT_SETTINGS, id: "caesar", shift: 3 };
 
 describe("plaintextFromEncryptedEdit", () => {
   it("treats typed characters as plaintext and leaves the rest mapped", () => {
